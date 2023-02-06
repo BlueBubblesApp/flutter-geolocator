@@ -40,45 +40,7 @@ void GeolocatorPlugin::RegisterWithRegistrar(
     registrar->messenger(), "flutter.baseflow.com/geolocator",
     &StandardMethodCodec::GetInstance());
 
-  auto geolocatorStreamChannel = std::make_unique<EventChannel<EncodableValue>>(
-    registrar->messenger(), "flutter.baseflow.com/geolocator_updates",
-    &StandardMethodCodec::GetInstance());
-
-  auto geolocatorServiceStreamChannel = std::make_unique<EventChannel<EncodableValue>>(
-    registrar->messenger(), "flutter.baseflow.com/geolocator_service_updates",
-    &StandardMethodCodec::GetInstance());
-
   std::unique_ptr<GeolocatorPlugin> plugin = std::make_unique<GeolocatorPlugin>();
-
-  auto geolocatorHandler = std::make_unique<
-    StreamHandlerFunctions<EncodableValue>>(
-    [plugin_pointer = plugin.get()](
-        const EncodableValue* arguments,
-        std::unique_ptr<EventSink<EncodableValue>>&& events)
-        -> std::unique_ptr<StreamHandlerError<EncodableValue>> {
-      return plugin_pointer->OnListen(arguments, std::move(events));
-    },
-    [plugin_pointer = plugin.get()](const EncodableValue* arguments)
-        -> std::unique_ptr<StreamHandlerError<EncodableValue>> {
-      return plugin_pointer->OnCancel(arguments);
-    });
-
-  geolocatorStreamChannel->SetStreamHandler(std::move(geolocatorHandler));
-
-  auto geolocatorServiceHandler = std::make_unique<
-    StreamHandlerFunctions<EncodableValue>>(
-    [plugin_pointer = plugin.get()](
-        const EncodableValue* arguments,
-        std::unique_ptr<EventSink<EncodableValue>>&& events)
-        -> std::unique_ptr<StreamHandlerError<EncodableValue>> {
-      return plugin_pointer->OnServiceListen(arguments, std::move(events));
-    },
-    [plugin_pointer = plugin.get()](const EncodableValue* arguments)
-        -> std::unique_ptr<StreamHandlerError<EncodableValue>> {
-      return plugin_pointer->OnServiceCancel(arguments);
-    });
-
-  geolocatorServiceStreamChannel->SetStreamHandler(std::move(geolocatorServiceHandler));
 
   channel->SetMethodCallHandler(
     [plugin_pointer = plugin.get()](const auto& call, auto result) {
@@ -95,7 +57,7 @@ GeolocatorPlugin::~GeolocatorPlugin() = default;
 void GeolocatorPlugin::HandleMethodCall(
     const MethodCall<>& method_call,
     std::unique_ptr<MethodResult<>> result) {
-  
+
   auto methodName = method_call.method_name();
   if (methodName.compare("checkPermission") == 0) {
     OnCheckPermission(std::move(result));
@@ -121,7 +83,7 @@ void GeolocatorPlugin::OpenPrivacyLocationSettings(std::unique_ptr<MethodResult<
   std::wstring url {L"ms-settings:privacy-location"};
 
   int status = static_cast<int>(reinterpret_cast<INT_PTR>(
-    ::ShellExecuteW(nullptr, TEXT("open"), url.c_str(), 
+    ::ShellExecuteW(nullptr, TEXT("open"), url.c_str(),
     nullptr, nullptr, SW_SHOWNORMAL)));
 
   // Per ::ShellExecuteW documentation, anything >32 indicates success.
@@ -174,72 +136,6 @@ winrt::fire_and_forget GeolocatorPlugin::OnGetCurrentPosition(const MethodCall<>
   result->Success(LocationToEncodableMap(location));
 }
 
-std::unique_ptr<StreamHandlerError<EncodableValue>> GeolocatorPlugin::OnListen(
-  const EncodableValue* arguments,
-  std::unique_ptr<EventSink<EncodableValue>>&& events){
-
-  auto accuracy = LocationAccuracy::Best;
-  long distanceFilter = 0;
-  long timeInterval = 1;
-
-  if (arguments != nullptr) {
-    accuracy = (LocationAccuracy)GetArgument<int>("accuracy", arguments, accuracy);
-    distanceFilter = GetArgument<int>("distanceFilter", arguments, distanceFilter);
-    timeInterval = GetArgument<int>("timeInterval", arguments, timeInterval);
-  }
-
-  m_positionChangedRevoker.revoke();
-
-  geolocator.DesiredAccuracy(accuracy < LocationAccuracy::Medium
-    ? PositionAccuracy::Default
-    : PositionAccuracy::High);
-  geolocator.MovementThreshold(distanceFilter);
-  geolocator.ReportInterval(timeInterval);
-
-  m_positionChangedRevoker = geolocator.PositionChanged(winrt::auto_revoke,
-    [events = std::move(events)](Geolocator const& geolocator, PositionChangedEventArgs e)
-    {
-        events->Success(LocationToEncodableMap(e.Position()));
-    });
-
-  return nullptr;
-}
-
-std::unique_ptr<StreamHandlerError<EncodableValue>> GeolocatorPlugin::OnCancel(const EncodableValue* arguments){
-  m_positionChangedRevoker.revoke();
-  return nullptr;
-}
-
-std::unique_ptr<StreamHandlerError<EncodableValue>> GeolocatorPlugin::OnServiceListen(
-  const EncodableValue* arguments,
-  std::unique_ptr<EventSink<EncodableValue>>&& events){
-
-  m_currentStatus = statusGeolocator.LocationStatus();
-  if (m_currentStatus != PositionStatus::Disabled) {
-    m_currentStatus = PositionStatus::Ready;
-  }
-
-  m_statusChangedRevoker = statusGeolocator.StatusChanged(winrt::auto_revoke,
-    [events = std::move(events), this](Geolocator const& geolocator, StatusChangedEventArgs e)
-    {
-      if (m_currentStatus != PositionStatus::Disabled && e.Status() == PositionStatus::Disabled
-        || m_currentStatus != PositionStatus::Ready && e.Status() == PositionStatus::Ready) {
-        auto status = e.Status() == PositionStatus::NotAvailable
-          ? ServiceStatus::Disabled
-          : ServiceStatus::Enabled;
-        events->Success(EncodableValue((int)status));
-        m_currentStatus = e.Status();
-      }
-    });
-
-  return nullptr;
-}
-
-std::unique_ptr<StreamHandlerError<EncodableValue>> GeolocatorPlugin::OnServiceCancel(const EncodableValue* arguments){
-  m_statusChangedRevoker.revoke();
-  return nullptr;
-}
-
 EncodableMap GeolocatorPlugin::LocationToEncodableMap(Geoposition const& location) {
   if (location == nullptr) {
     return EncodableMap();
@@ -256,7 +152,7 @@ EncodableMap GeolocatorPlugin::LocationToEncodableMap(Geoposition const& locatio
   }
 
   position.insert(std::make_pair(EncodableValue("accuracy"), EncodableValue(location.Coordinate().Accuracy())));
-  
+
   if (location.Coordinate().Heading() != nullptr) {
     position.insert(std::make_pair(EncodableValue("heading"), EncodableValue(location.Coordinate().Heading().GetDouble())));
   }
