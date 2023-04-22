@@ -21,6 +21,8 @@ flutter:
         default_package: geolocator_web
       windows:
         default_package: geolocator_windows
+      linux:
+        default_package: geolocator_linux
 
 dependencies:
   flutter:
@@ -35,6 +37,7 @@ dependencies:
       url: https://github.com/BlueBubblesApp/flutter-geolocator.git
       path: geolocator_windows
       ref: no_windows_streams
+  geolocator_linux: ^0.1.2
 
 dev_dependencies:
   flutter_test:
