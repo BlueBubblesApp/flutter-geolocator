@@ -37,7 +37,11 @@ dependencies:
       url: https://github.com/BlueBubblesApp/flutter-geolocator.git
       path: geolocator_windows
       ref: no_windows_streams
-  geolocator_linux: ^0.1.2
+  geolocator_linux:
+    git:
+      url: https://github.com/BlueBubblesApp/flutter-geolocator.git
+      path: geolocator_linux
+      ref: no_windows_streams
 
 dev_dependencies:
   flutter_test:
